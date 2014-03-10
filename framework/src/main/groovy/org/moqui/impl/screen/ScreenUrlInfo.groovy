@@ -174,34 +174,41 @@ class ScreenUrlInfo {
     List<String> getExtraPathNameList() { return extraPathNameList }
 
     Map<String, String> getParameterMap() {
+        ExecutionContext ec = sri.getEc()
         Map<String, String> pm = new HashMap()
         // get default parameters for the target screen
         if (targetScreen != null) {
             for (ParameterItem pi in targetScreen.getParameterMap().values()) {
-                Object value = pi.getValue(sri.ec)
-                if (value) pm.put(pi.name, value as String)
+                Object value = pi.getValue(ec)
+                if (value) pm.put(pi.name, ScreenRenderImpl.makeValuePlainString(value))
+            }
+        }
+        if (targetTransition != null && targetTransition.getParameterMap()) {
+            for (ParameterItem pi in targetTransition.getParameterMap().values()) {
+                Object value = pi.getValue(ec)
+                if (value) pm.put(pi.name, ScreenRenderImpl.makeValuePlainString(value))
             }
         }
         if (targetTransition != null && targetTransition.getSingleServiceName()) {
             String targetServiceName = targetTransition.getSingleServiceName()
-            ServiceDefinition sd = ((ServiceFacadeImpl) sri.getEc().getService()).getServiceDefinition(targetServiceName)
+            ServiceDefinition sd = ((ServiceFacadeImpl) ec.getService()).getServiceDefinition(targetServiceName)
             if (sd != null) {
                 for (String pn in sd.getInParameterNames()) {
-                    Object value = sri.ec.context.get(pn)
-                    if (!value && sri.ec.web != null) value = sri.ec.web.parameters.get(pn)
-                    if (value) pm.put(pn, value as String)
+                    Object value = ec.getContext().get(pn)
+                    if (!value && ec.getWeb() != null) value = ec.getWeb().getParameters().get(pn)
+                    if (value) pm.put(pn, ScreenRenderImpl.makeValuePlainString(value))
                 }
             } else if (targetServiceName.contains("#")) {
                 // service name but no service def, see if it is an entity op and if so try the pk fields
                 String verb = targetServiceName.substring(0, targetServiceName.indexOf("#"))
                 if (verb == "create" || verb == "update" || verb == "delete" || verb == "store") {
-                    String en = targetServiceName.substring(targetServiceName.indexOf("#")+1)
-                    EntityDefinition ed = ((EntityFacadeImpl) sri.ec.entity).getEntityDefinition(en)
+                    String en = targetServiceName.substring(targetServiceName.indexOf("#") + 1)
+                    EntityDefinition ed = ((EntityFacadeImpl) ec.getEntity()).getEntityDefinition(en)
                     if (ed != null) {
                         for (String fn in ed.getPkFieldNames()) {
-                            Object value = sri.ec.context.get(fn)
-                            if (!value && sri.ec.web != null) value = sri.ec.web.parameters.get(fn)
-                            if (value) pm.put(fn, value as String)
+                            Object value = ec.getContext().get(fn)
+                            if (!value && ec.getWeb() != null) value = ec.getWeb().getParameters().get(fn)
+                            if (value) pm.put(fn, ScreenRenderImpl.makeValuePlainString(value))
                         }
                     }
                 }
@@ -227,22 +234,22 @@ class ScreenUrlInfo {
         StringBuilder ps = new StringBuilder()
         Map<String, String> pm = this.getParameterMap()
         for (Map.Entry<String, String> pme in pm) {
-            if (!pme.value) continue
+            if (!pme.getValue()) continue
             ps.append("/~")
-            ps.append(pme.key).append("=").append(sri.urlCodec.encode(pme.value))
+            ps.append(pme.getKey()).append("=").append(sri.urlCodec.encode(pme.getValue()))
         }
         return ps.toString()
     }
 
     ScreenUrlInfo addParameter(Object name, Object value) {
         if (!name || value == null) return this
-        pathParameterMap.put(name as String, value as String)
+        pathParameterMap.put(name as String, ScreenRenderImpl.makeValuePlainString(value))
         return this
     }
     ScreenUrlInfo addParameters(Map manualParameters) {
         if (!manualParameters) return this
         for (Map.Entry mpEntry in manualParameters.entrySet()) {
-            pathParameterMap.put(mpEntry.key as String, mpEntry.value as String)
+            pathParameterMap.put(mpEntry.getKey() as String, ScreenRenderImpl.makeValuePlainString(mpEntry.getValue()))
         }
         return this
     }
@@ -308,18 +315,21 @@ class ScreenUrlInfo {
                 // handle case where last one may be a transition name, and not a subscreen name
                 TransitionItem ti = lastSd.getTransitionItem(pathName, ec.web ? ec.web.request.method : "")
                 if (ti) {
+                    // extra path elements always allowed after transitions for parameters, but we don't want the transition name on it
+                    extraPathNameList.remove(0)
+
                     // Screen Transition as a URL Alias:
                     // if fromScreenPath is a transition, and that transition has no condition,
                     // service/actions or conditional-response then use the default-response.url instead
                     // of the name (if type is screen-path or empty, url-type is url or empty)
-                    if (ti.condition == null && ti.actions == null && !ti.conditionalResponseList &&
+                    if (ti.condition == null && !ti.hasActionsOrSingleService() && !ti.conditionalResponseList &&
                             ti.defaultResponse && ti.defaultResponse.type == "url" &&
                             ti.defaultResponse.urlType == "screen-path" && ec.web != null && expandAliasTransition) {
                         List<String> aliasPathList = new ArrayList(fullPathNameList)
                         // remove transition name
                         aliasPathList.remove(aliasPathList.size()-1)
 
-                        Map transitionParameters = ti.defaultResponse.expandParameters(ec)
+                        Map transitionParameters = ti.defaultResponse.expandParameters(this, ec)
 
                         // create a ScreenUrlInfo, then copy its info into this
                         ScreenUrlInfo aliasUrlInfo = new ScreenUrlInfo(sri, fromSd, aliasPathList,
@@ -335,9 +345,6 @@ class ScreenUrlInfo {
 
                     this.targetTransition = ti
                     this.targetTransitionActualName = pathName
-
-                    // extra path elements always allowed after transitions for parameters, but we don't want the transition name on it
-                    extraPathNameList.remove(0)
 
                     // if no return above, just break out; a transition means we're at the end
                     break

@@ -3,6 +3,8 @@
 <moqui-conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/moqui-conf-1.3.xsd">
 
+    <tools enable-elasticsearch="true" enable-camel="false"/>
+
     <cache-list>
         <!-- Development Mode - don't use these for production, load testing, etc.
              Cleared by default every 20 seconds from when loaded into cache. -->
@@ -35,7 +37,7 @@
         <cache name="l10n.message" expire-time-idle="600"/>
     </cache-list>
     
-    <server-stats>
+    <server-stats stats-skip-condition="ec.web?.request?.pathInfo?.startsWith('/rpc') || ec.web?.request?.pathInfo?.startsWith('/status')">
         <!-- For development, track everything! It'll run slow through... -->
         <artifact-stats type="screen" persist-bin="true" persist-hit="true"/>
         <artifact-stats type="screen-content" persist-bin="true" persist-hit="true"/>
@@ -64,8 +66,8 @@
     </entity-facade>
 
     <repository-list>
-        <repository name="main" location="http://localhost:8081/rmi" type="rmi" workspace="default"
-                    username="admin" password="admin"/>
+        <!-- <repository name="main" location="http://localhost:8081/rmi" type="rmi" workspace="default"
+                    username="admin" password="admin"/> -->
     </repository-list>
     <component-list>
         <!-- This loads the tools component over top of the default one, which will result in a warning but works

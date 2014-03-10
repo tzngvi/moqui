@@ -56,10 +56,20 @@ class EntityDbMeta {
             // if it's in this table we've already checked it
             if (entityTablesChecked.containsKey(ed.getFullEntityName())) return
             // otherwise do the real check, in a synchronized method
-            internalCheckTable(ed)
+            internalCheckTable(ed, false)
         }
     }
-    synchronized void internalCheckTable(EntityDefinition ed) {
+    void checkTableStartup(EntityDefinition ed) {
+        if (ed.isViewEntity()) {
+            for (Node memberEntityNode in ed.entityNode."member-entity") {
+                EntityDefinition med = efi.getEntityDefinition((String) memberEntityNode."@entity-name")
+                checkTableStartup(med)
+            }
+        } else {
+            internalCheckTable(ed, true)
+        }
+    }
+    synchronized void internalCheckTable(EntityDefinition ed, boolean startup) {
         // if it's in this table we've already checked it
         if (entityTablesChecked.containsKey(ed.getFullEntityName())) return
 
@@ -98,7 +108,7 @@ class EntityDbMeta {
                 }
             }
             // create foreign keys after checking each to see if it already exists
-            if (datasourceNode?."@runtime-add-fks" == "true") createForeignKeys(ed, true)
+            if (startup || datasourceNode?."@runtime-add-fks" == "true") createForeignKeys(ed, true)
         }
         entityTablesChecked.put(ed.getFullEntityName(), new Timestamp(System.currentTimeMillis()))
         entityTablesExist.put(ed.getFullEntityName(), true)
@@ -144,8 +154,14 @@ class EntityDbMeta {
                     if (tableSet.next()) {
                         dbResult = true
                     } else {
-                        if (logger.isTraceEnabled()) logger.trace("Table for entity [${ed.getFullEntityName()}] does NOT exist")
-                        dbResult = false
+                        // try lower case, just in case DB is case sensitive
+                        tableSet = dbData.getTables(null, ed.getSchemaName(), ed.getTableName().toLowerCase(), types)
+                        if (tableSet.next()) {
+                            dbResult = true
+                        } else {
+                            if (logger.isTraceEnabled()) logger.trace("Table for entity [${ed.getFullEntityName()}] does NOT exist")
+                            dbResult = false
+                        }
                     }
                 } catch (Exception e) {
                     throw new EntityException("Exception checking to see if table [${ed.getTableName()}] exists", e)
@@ -231,14 +247,33 @@ class EntityDbMeta {
             colSet = dbData.getColumns(null, ed.getSchemaName(), ed.getTableName(), "%")
             while (colSet.next()) {
                 String colName = colSet.getString("COLUMN_NAME")
-                String fieldName = null
-                for (String fn in fnSet) if (ed.getColumnName(fn, false) == colName) { fieldName = fn; break }
-                if (fieldName) fnSet.remove(fieldName)
+                for (String fn in fnSet) {
+                    String fieldColName = ed.getColumnName(fn, false)
+                    if (fieldColName == colName || fieldColName.toLowerCase() == colName) {
+                        fnSet.remove(fn)
+                        break
+                    }
+                }
             }
 
             if (fnSet.size() == fieldCount) {
-                logger.warn("Could not find any columns to match fields for entity [${ed.getFullEntityName()}]")
-                return null
+                // try lower case table name
+                colSet = dbData.getColumns(null, ed.getSchemaName(), ed.getTableName().toLowerCase(), "%")
+                while (colSet.next()) {
+                    String colName = colSet.getString("COLUMN_NAME")
+                    for (String fn in fnSet) {
+                        String fieldColName = ed.getColumnName(fn, false)
+                        if (fieldColName == colName || fieldColName.toLowerCase() == colName) {
+                            fnSet.remove(fn)
+                            break
+                        }
+                    }
+                }
+
+                if (fnSet.size() == fieldCount) {
+                    logger.warn("Could not find any columns to match fields for entity [${ed.getFullEntityName()}]")
+                    return null
+                }
             }
             return fnSet
         } catch (Exception e) {
@@ -401,12 +436,34 @@ class EntityDbMeta {
             while (ikSet.next()) {
                 String pkTable = ikSet.getString("PKTABLE_NAME")
                 // logger.info("FK exists [${ed.getFullEntityName()}] - [${relNode."@title"}${relEd.getFullEntityName()}] PKTABLE_NAME [${ikSet.getString("PKTABLE_NAME")}] PKCOLUMN_NAME [${ikSet.getString("PKCOLUMN_NAME")}] FKCOLUMN_NAME [${ikSet.getString("FKCOLUMN_NAME")}]")
-                if (pkTable != relEd.tableName) continue
+                if (pkTable != relEd.getTableName() && pkTable != relEd.getTableName().toLowerCase()) continue
                 String fkCol = ikSet.getString("FKCOLUMN_NAME")
                 fkColsFound.add(fkCol)
-                String foundField = null
-                for (String fn in fieldNames) if (ed.getColumnName(fn, false) == fkCol) foundField = fn
-                if (foundField) fieldNames.remove(foundField)
+                for (String fn in fieldNames) {
+                    String fnColName = ed.getColumnName(fn, false)
+                    if (fnColName == fkCol || fnColName.toLowerCase() == fkCol) {
+                        fieldNames.remove(fn)
+                        break
+                    }
+                }
+            }
+            if (fieldNames.size() > 0) {
+                // try with lower case table name
+                ikSet = dbData.getImportedKeys(null, ed.getSchemaName(), ed.getTableName().toLowerCase())
+                while (ikSet.next()) {
+                    String pkTable = ikSet.getString("PKTABLE_NAME")
+                    // logger.info("FK exists [${ed.getFullEntityName()}] - [${relNode."@title"}${relEd.getFullEntityName()}] PKTABLE_NAME [${ikSet.getString("PKTABLE_NAME")}] PKCOLUMN_NAME [${ikSet.getString("PKCOLUMN_NAME")}] FKCOLUMN_NAME [${ikSet.getString("FKCOLUMN_NAME")}]")
+                    if (pkTable != relEd.getTableName() && pkTable != relEd.getTableName().toLowerCase()) continue
+                    String fkCol = ikSet.getString("FKCOLUMN_NAME")
+                    fkColsFound.add(fkCol)
+                    for (String fn in fieldNames) {
+                        String fnColName = ed.getColumnName(fn, false)
+                        if (fnColName == fkCol || fnColName.toLowerCase() == fkCol) {
+                            fieldNames.remove(fn)
+                            break
+                        }
+                    }
+                }
             }
 
             // logger.info("Checking FK exists for entity [${ed.getFullEntityName()}] relationship [${relNode."@title"}${relEd.getFullEntityName()}] fields to match are [${keyMap.keySet()}] FK columns found [${fkColsFound}] final fieldNames (empty for match) [${fieldNames}]")
@@ -507,7 +564,7 @@ class EntityDbMeta {
                 sql.append(relEd.getColumnName((String) keyMap.get(keyName), false))
             }
             sql.append(")")
-            if (databaseNode."@use-fk-initially-deferred") {
+            if (databaseNode."@use-fk-initially-deferred" == "true") {
                 sql.append(" INITIALLY DEFERRED")
             }
 
