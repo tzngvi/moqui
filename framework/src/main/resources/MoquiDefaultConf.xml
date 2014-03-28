@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!-- No copyright or license for configuration file, details here are not considered a creative work. -->
 <moqui-conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/moqui-conf-1.3.xsd">
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/moqui-conf-1.4.xsd">
 
     <!-- Settings in this file can be overridden in a runtime conf file that has a any of the desired sub-elements. -->
 
@@ -32,6 +32,7 @@
         <cache name="resource.ftl.location" expire-time-idle="0" expire-time-live="0" max-elements="10000"/>
         <cache name="resource.gstring.location" expire-time-idle="0" expire-time-live="0" max-elements="10000"/>
         <cache name="resource.wiki.location" expire-time-idle="0" expire-time-live="0" max-elements="10000"/>
+        <cache name="resource.markdown.location" expire-time-idle="0" expire-time-live="0" max-elements="10000"/>
         <cache name="resource.text.location" expire-time-idle="0" expire-time-live="0" max-elements="10000"/>
         <cache name="resource.reference.location" expire-time-idle="0" expire-time-live="0" max-elements="10000"/>
 
@@ -117,13 +118,20 @@
         <template-renderer extension=".html.ftl" class="org.moqui.impl.context.renderer.FtlTemplateRenderer"/>
         <template-renderer extension=".gstring" class="org.moqui.impl.context.renderer.GStringTemplateRenderer"/>
         <template-renderer extension=".html.gstring" class="org.moqui.impl.context.renderer.GStringTemplateRenderer"/>
+
         <template-renderer extension=".cwiki" class="org.moqui.impl.context.renderer.WikiTemplateRenderer"/>
+        <template-renderer extension=".cwiki.ftl" class="org.moqui.impl.context.renderer.FtlCwikiTemplateRenderer"/>
         <template-renderer extension=".confluence" class="org.moqui.impl.context.renderer.WikiTemplateRenderer"/>
         <template-renderer extension=".mediawiki" class="org.moqui.impl.context.renderer.WikiTemplateRenderer"/>
         <template-renderer extension=".textile" class="org.moqui.impl.context.renderer.WikiTemplateRenderer"/>
         <template-renderer extension=".tracwiki" class="org.moqui.impl.context.renderer.WikiTemplateRenderer"/>
         <template-renderer extension=".twiki" class="org.moqui.impl.context.renderer.WikiTemplateRenderer"/>
-        <template-renderer extension=".cwiki.ftl" class="org.moqui.impl.context.renderer.FtlCwikiTemplateRenderer"/>
+
+        <template-renderer extension=".md" class="org.moqui.impl.context.renderer.MarkdownTemplateRenderer"/>
+        <template-renderer extension=".markdown" class="org.moqui.impl.context.renderer.MarkdownTemplateRenderer"/>
+        <template-renderer extension=".md.ftl" class="org.moqui.impl.context.renderer.FtlMarkdownTemplateRenderer"/>
+        <template-renderer extension=".markdown.ftl" class="org.moqui.impl.context.renderer.FtlMarkdownTemplateRenderer"/>
+
         <!-- a renderer for .html isn't necessary because the default is to write the text as-is, however this is useful
             so that the extension becomes a default extension and doesn't have to be in the URL -->
         <template-renderer extension=".html" class="org.moqui.impl.context.renderer.NoTemplateRenderer"/>

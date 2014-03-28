@@ -2,10 +2,57 @@
 Moqui Framework Release Notes
 
 ===========================================================================
-Release 1.3.3 - TBD
+Release 1.4.1 - TBD
 ===========================================================================
 
-Moqui Framework 1.3.3 is a minor new feature and bug fix release.
+Moqui Framework 1.4.1 is a minor new feature and bug fix release.
+
+New Features:
+
+- Added UserGroupPreference, like UserPreference but for user groups.
+  UserFacade.getPreference() now looks for group preference if no user
+  preference is found.
+- Changed Service ECA rules with @when of tx-commit or tx-rollback to
+  attach to the transaction after the service is run so that results are
+  available
+
+Bug Fixes:
+
+- Changed commit() to rollback if commit fails to cleanup the transaction,
+  can happen for example with TransactionCache has a DB error during
+  pre-commit
+- ArtifactHit count now skipped for UserAccount to avoid infinite recursion
+  (shows as a StackOverflow exception)
+- EntityValue.containsKey() now returns true if there is a value for the
+  key (even null), not just if it is a valid field name; this was
+  inconvenient for various things, especially when treating EntityValue
+  like a Map
+- Fixed issue where Service ECA rules with @when of tx-commit or
+  tx-rollback were never run
+
+===========================================================================
+Release 1.4.0 - 21 Mar 2014
+===========================================================================
+
+Moqui Framework 1.4.0 is a major new feature and bug fix release.
+
+Significant new features include: incorporating the Metis Admin Template,
+adding Twitter Bootstrap and updating jQuery/jQueryUI, added Bitronix
+transaction manager and pluggable JTA implementation support, added JBoss
+KIE and Drools with framework and component knowledge base support,
+Markdown support, JSON-RPC improvements, data loading improvements to
+support CSV files and calling services to load data, a Quartz Scheduler
+history in the DB and a Quartz persistence implementation, and services to
+clean Quartz history as well as Moqui artifact hit and hit bin histories.
+
+There are various bug fixes and stability improvements in this release for
+things like PostgreSQL support, input data handling, form-list and general
+pagination, Tomcat and other Servlet container deployment, and email
+sending.
+
+This release is backward compatible with the previous release (1.3.2),
+though some configuration changes may be needed and custom HTML/JS may need
+to be updated for the new JS libraries and Metis Admin Template.
 
 New Features:
 
@@ -17,15 +64,25 @@ New Features:
 - Added JBoss KIE and Drools libraries (version 6.0.0.Final) and Moqui API
   additions for getting a KieContext, plus Moqui automatically loads and
   builds component kie directories when present
+- Added Markdown4J 2.2
+- Added Apache Commons CSV 1.0-SNAPSHOT 20140122
 - Updated Apache HttpCore to 4.3.1, HttpClient to 4.3.2, Commons Logging
   to 1.1.3, Commons Codec to 1.6
-- Added Apache Commons CSV 1.0-SNAPSHOT 20140122
+- Updated Apache Lucene to 4.6.1, ehcache to 2.8.1, ElasticSearch to 1.0.1,
+  Groovy to 2.2.2
+- Updated Winstone to 1.0.5 (note this is very different from 0.9.10)
+
 - Added ISO 8601 date/time parsing as another default in L10nFacade
 - Added transition.@read-only attribute to skip XSRF check for insecure
   parameters when the transition does not modify data, and when data is
   not too sensitive
 - Added transition.parameter sub-elements to declare additional parameters
   for a transition, just like and in addition to the screen parameters
+- Added Markdown wiki support for files with extensions .md and .markdown
+  using Markdown4J, and .md.ftl or .markdown.ftl for FTL + Markdown
+- Added clean#ArtifactData service to remove ArtifactHit/Bin records older
+  than a certain number of days (default 60), and a XML configured Quartz
+  job with a trigger to run it every day at 2AM
 
 - Entity Facade
   - Enhanced EntityDataLoader to also call services, just use the service
@@ -35,6 +92,7 @@ New Features:
   - The entity-find-one.@value-field attribute can now be an existing Map
     that is not an EntityValue and if so entity fields are added to the Map
     instead of assigning the find result to @value-field
+  - Improved EntityFind and EntityList for cached pagination
 - Service Facade
   - Removed Dzhuvinov JSON-RPC jars (implemented internally now)
   - Improved and fixed JSON-RPC remote service client and auto server
@@ -45,7 +103,7 @@ New Features:
     attribute except that it is a field name or expression for the default
     field value.
   - Added SchedulerHistory and code to populate it on various Quartz
-    Scheduler events
+    Scheduler events, and scheduled service to clean up old records
   - Added EntityJobStore to do persistence for Quartz Scheduler through
     the Entity Facade instead of direct to DB for easier deployment and
     more consistent operation with other parts of Moqui Framework
@@ -106,6 +164,12 @@ Bug Fixes:
   where transition was not removed from the path name list and path,
   screen, and transition parameters were not expanded for response
   parameters
+- Fixed issue in sendEmailTemplate.groovy where webappName was passed into
+  the screen render for the HTML for the email, but not the plain text
+- Fixed issues related to entity-find.@cache attribute used inconsistently
+  in generated code, and more generally with filtering and pagination when
+  using both entity-find.@cache=true and entity-find.search-form-inputs,
+  especially along with entity-find.date-filter.
 
 ===========================================================================
 Release 1.3.2 - 20 Nov 2013
@@ -961,7 +1025,7 @@ This release includes:
   - Added entity-auto support for the verb "store" which does a create if
     record does not exist and update if it does
   - Support of pre-configured scheduled job exists, see:
-    http://www.quartz-scheduler.org/docs/cookbook/JobInitPlugin.html
+    http://quartz-scheduler.org/documentation/quartz-2.2.x/cookbook/JobInitPlugin
 - Artifact Execution Facade
   - Persist data about authz failures (in ArtifactAuthzFailure entity)
   - Artifact Tar-pitting based on configuration in db (see example
@@ -1360,14 +1424,13 @@ Features considered, but may not to be included in 1.x series
   - Screen tree elements
   - Screen section-iterate pagination
   - Screen form automatic client JS validation for service in-parameters
-    for matches, number-range, text-length, text-letters, time-range,
+    for number-range, text-length, text-letters, time-range,
     credit-card.@types
   - Dynamic Screens (database-driven: DynamicScreen* entities)
   - Dynamic Forms (database-driven: DynForm* entities) like the OFBiz
     Survey and related entities (DbForm already in place to extend
     XML Screen Forms)
 - Entity Facade
-  - Support for CouchDB, and perhaps other NoSQL databases
   - LiquiBase integration, entity.change-set element
   - EntitySync tool
   - Add view log like current change audit log (AuditLogView?)
@@ -1390,11 +1453,7 @@ Features considered, but may not to be included in 1.x series
   - Script Run (or groovy shell?)
   - Service
     - Configure and run chain of services (dynamic wizard)
-    - Scheduler (view scheduled services with cancel and add)
   - Artifact Info screens (with in/out references for all)
-
-- Add MySchedule to run OOTB for Quartz admin: https://code.google.com/p/myschedule/
-- Markdown wiki support (.markdown, .markdown.ftl - https://code.google.com/p/markdown4j/)
 
 - Workflow that manages activity flow with screens and service attached to
   activities and tasks based on them taking users to defined or automatic

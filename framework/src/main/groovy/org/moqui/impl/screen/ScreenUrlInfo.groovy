@@ -11,9 +11,11 @@
  */
 package org.moqui.impl.screen
 
+import org.moqui.BaseException
 import org.moqui.context.ContextStack
 import org.moqui.context.ExecutionContext
 import org.moqui.context.ResourceReference
+import org.moqui.impl.StupidUtilities
 import org.moqui.impl.context.ExecutionContextImpl
 import org.moqui.impl.context.WebFacadeImpl
 import org.moqui.impl.screen.ScreenDefinition.ParameterItem
@@ -180,13 +182,13 @@ class ScreenUrlInfo {
         if (targetScreen != null) {
             for (ParameterItem pi in targetScreen.getParameterMap().values()) {
                 Object value = pi.getValue(ec)
-                if (value) pm.put(pi.name, ScreenRenderImpl.makeValuePlainString(value))
+                if (value) pm.put(pi.name, StupidUtilities.toPlainString(value))
             }
         }
         if (targetTransition != null && targetTransition.getParameterMap()) {
             for (ParameterItem pi in targetTransition.getParameterMap().values()) {
                 Object value = pi.getValue(ec)
-                if (value) pm.put(pi.name, ScreenRenderImpl.makeValuePlainString(value))
+                if (value) pm.put(pi.name, StupidUtilities.toPlainString(value))
             }
         }
         if (targetTransition != null && targetTransition.getSingleServiceName()) {
@@ -196,7 +198,7 @@ class ScreenUrlInfo {
                 for (String pn in sd.getInParameterNames()) {
                     Object value = ec.getContext().get(pn)
                     if (!value && ec.getWeb() != null) value = ec.getWeb().getParameters().get(pn)
-                    if (value) pm.put(pn, ScreenRenderImpl.makeValuePlainString(value))
+                    if (value) pm.put(pn, StupidUtilities.toPlainString(value))
                 }
             } else if (targetServiceName.contains("#")) {
                 // service name but no service def, see if it is an entity op and if so try the pk fields
@@ -208,7 +210,7 @@ class ScreenUrlInfo {
                         for (String fn in ed.getPkFieldNames()) {
                             Object value = ec.getContext().get(fn)
                             if (!value && ec.getWeb() != null) value = ec.getWeb().getParameters().get(fn)
-                            if (value) pm.put(fn, ScreenRenderImpl.makeValuePlainString(value))
+                            if (value) pm.put(fn, StupidUtilities.toPlainString(value))
                         }
                     }
                 }
@@ -243,13 +245,13 @@ class ScreenUrlInfo {
 
     ScreenUrlInfo addParameter(Object name, Object value) {
         if (!name || value == null) return this
-        pathParameterMap.put(name as String, ScreenRenderImpl.makeValuePlainString(value))
+        pathParameterMap.put(name as String, StupidUtilities.toPlainString(value))
         return this
     }
     ScreenUrlInfo addParameters(Map manualParameters) {
         if (!manualParameters) return this
         for (Map.Entry mpEntry in manualParameters.entrySet()) {
-            pathParameterMap.put(mpEntry.getKey() as String, ScreenRenderImpl.makeValuePlainString(mpEntry.getValue()))
+            pathParameterMap.put(mpEntry.getKey() as String, StupidUtilities.toPlainString(mpEntry.getValue()))
         }
         return this
     }
@@ -325,19 +327,19 @@ class ScreenUrlInfo {
                     if (ti.condition == null && !ti.hasActionsOrSingleService() && !ti.conditionalResponseList &&
                             ti.defaultResponse && ti.defaultResponse.type == "url" &&
                             ti.defaultResponse.urlType == "screen-path" && ec.web != null && expandAliasTransition) {
-                        List<String> aliasPathList = new ArrayList(fullPathNameList)
-                        // remove transition name
-                        aliasPathList.remove(aliasPathList.size()-1)
 
                         Map transitionParameters = ti.defaultResponse.expandParameters(this, ec)
 
                         // create a ScreenUrlInfo, then copy its info into this
-                        ScreenUrlInfo aliasUrlInfo = new ScreenUrlInfo(sri, fromSd, aliasPathList,
+                        ScreenUrlInfo aliasUrlInfo = new ScreenUrlInfo(sri, fromSd, preTransitionPathNameList,
                                 ti.defaultResponse.url, false,
                                 (this.lastStandalone || transitionParameters.lastStandalone == "true"))
 
                         // add transition parameters
                         aliasUrlInfo.addParameters(transitionParameters)
+
+                        // for alias transitions rendered in-request put the parameters in the context
+                        ec.getContext().putAll(transitionParameters)
 
                         aliasUrlInfo.copyUrlInfoInto(this)
                         return
@@ -362,12 +364,16 @@ class ScreenUrlInfo {
                     break
                 }
 
-                throw new ScreenResourceNotFoundException(fromSd, fullPathNameList, lastSd, pathName,
+                throw new ScreenResourceNotFoundException(fromSd, fullPathNameList, lastSd, extraPathNameList?.last(), null,
                         new Exception("Screen sub-content not found here"))
             }
 
             ScreenDefinition nextSd = sri.sfi.getScreenDefinition(nextLoc)
-            if (nextSd == null) throw new IllegalArgumentException("Could not find screen at location [${nextLoc}], which is subscreen [${pathName}] in relative screen reference [${fromScreenPath}] in screen [${lastSd.location}]")
+            if (nextSd == null) {
+                throw new ScreenResourceNotFoundException(fromSd, fullPathNameList, lastSd, pathName, nextLoc,
+                        new Exception("Screen subscreen or transition not found here"))
+                // throw new IllegalArgumentException("Could not find screen at location [${nextLoc}], which is subscreen [${pathName}] in relative screen reference [${fromScreenPath}] in screen [${lastSd.location}]")
+            }
 
             if (nextSd.webSettingsNode?."@require-encryption" != "false") this.requireEncryption = true
             if (nextSd.screenNode?."@begin-transaction" == "true") this.beginTransaction = true
@@ -425,10 +431,16 @@ class ScreenUrlInfo {
                     break
                 }
 
-                throw new IllegalArgumentException("Could not find subscreen or transition [${subscreenName}] in screen [${lastSd.location}]")
+                throw new ScreenResourceNotFoundException(fromSd, fullPathNameList, lastSd, subscreenName, null,
+                        new Exception("Screen subscreen or transition not found here"))
+                // throw new BaseException("Could not find subscreen or transition [${subscreenName}] in screen [${lastSd.location}]")
             }
             ScreenDefinition nextSd = sri.sfi.getScreenDefinition(nextLoc)
-            if (nextSd == null) throw new IllegalArgumentException("Could not find screen at location [${nextLoc}], which is default subscreen [${subscreenName}] in screen [${lastSd.location}]")
+            if (nextSd == null) {
+                throw new ScreenResourceNotFoundException(fromSd, fullPathNameList, lastSd, subscreenName, nextLoc,
+                        new Exception("Screen subscreen or transition not found here"))
+                // throw new BaseException("Could not find screen at location [${nextLoc}], which is default subscreen [${subscreenName}] in screen [${lastSd.location}]")
+            }
 
             if (nextSd.webSettingsNode?."@require-encryption" != "false") this.requireEncryption = true
             if (nextSd.screenNode?."@begin-transaction" == "true") this.beginTransaction = true
@@ -454,6 +466,7 @@ class ScreenUrlInfo {
             baseUrl = sri.baseLinkUrl
             if (baseUrl && baseUrl.charAt(baseUrl.length()-1) == '/') baseUrl.substring(0, baseUrl.length()-1)
         } else {
+            if (!sri.webappName) throw new BaseException("No webappName specified, cannot get base URL for screen location ${sri.rootScreenLocation}")
             baseUrl = WebFacadeImpl.getWebappRootUrl(sri.webappName, sri.servletContextPath, true,
                     this.requireEncryption, (ExecutionContextImpl) ec)
         }
