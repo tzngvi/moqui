@@ -164,6 +164,7 @@ label.form-title { vertical-align: middle; display: inline-block; width: 120px; 
 */
 /* these are still used when a row has more than 2 fields in it */
 .field-row-item { float: left; display: block; margin-left: 17px; margin-right: 17px; }
+.field-row-item input, .field-row-item select { display: inline-block; }
 
 .form-list-outer {
 margin: 0 0 10px 0; padding: 4px; width: 100%;
@@ -190,6 +191,7 @@ display: table; table-layout: auto; border-collapse: separate; empty-cells: show
 
 .form-date-find span, .form-range-find span, .form-text-find span, .form-text-find select { font-size: .9em; }
 .form-date-time { white-space: nowrap; }
+.form-date-time span { display: inline; padding: 8px 12px; }
 
 .form-text-find input { display: inline-block; }
 .form-date-find input { display: inline-block; }
